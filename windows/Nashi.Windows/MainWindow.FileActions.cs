@@ -32,6 +32,6 @@ public sealed partial class MainWindow
                     Refresh();break;
                 }
             }
-        }catch(Exception error){MessageBox.Show(this,error.Message,"File action could not finish");}
+        }catch(Exception error){MessageBox.Show(this,L10n.Text(error.Message),L10n.Text("File action could not finish"));}
     }
 }

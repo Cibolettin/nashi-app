@@ -21,7 +21,7 @@ public sealed partial class SettingsWindow:Window
         // Each page slides in with a soft sound (both follow Settings › Motion & sound).
         sections.SelectionChanged+=(_,_)=>{ShowSection();scroller.ScrollToTop();Motion.Enter(page,0,12);Sounds.Page();};ShowSection();PreviewKeyDown+=(_,e)=>{if(e.Key==System.Windows.Input.Key.Escape&&recording is null){Close();e.Handled=true;}};
     }
-    private void Save(Preferences value){try{store.Save(value);changed();}catch(Exception error)when(error is IOException or ArgumentException or UnauthorizedAccessException){MessageBox.Show(this,error.Message,"Settings could not be saved");}}
+    private void Save(Preferences value){try{store.Save(value);changed();}catch(Exception error)when(error is IOException or ArgumentException or UnauthorizedAccessException){MessageBox.Show(this,L10n.Text(error.Message),L10n.Text("Settings could not be saved"));}}
     private static readonly Dictionary<string,string> SectionIcons=new(){["General"]="gear-six",["Formats"]="image",["Motion & sound"]="sparkle",["Shortcuts"]="keyboard",["Compatibility"]="arrows-left-right",["Folders"]="folder-open",["Updates"]="arrows-clockwise",["About"]="info"};
     private static DataTemplate SectionTemplate()
     {
@@ -82,7 +82,7 @@ public sealed partial class SettingsWindow:Window
     {
         Heading("Your kind of flow.","Small preferences that shape how Nashi feels every day.");
         Caption("Language and look");LanguagePicker();
-        if(appearanceStore is not null)Pick("Appearance",["system","light","dark"],appearanceStore.Appearance,v=>{try{appearanceStore.SetAppearance(v);Theme.Apply(v);}catch(Exception error)when(error is IOException or UnauthorizedAccessException){MessageBox.Show(this,error.Message,"Appearance could not be saved");}},"Follow Windows, or always stay light or dark.");
+        if(appearanceStore is not null)Pick("Appearance",["system","light","dark"],appearanceStore.Appearance,v=>{try{appearanceStore.SetAppearance(v);Theme.Apply(v);}catch(Exception error)when(error is IOException or UnauthorizedAccessException){MessageBox.Show(this,L10n.Text(error.Message),L10n.Text("Appearance could not be saved"));}},"Follow Windows, or always stay light or dark.");
         Caption("Dragging and the wheel");
         Toggle("Enable Nashi drag shortcuts",store.Value.Enabled,v=>Save(store.Value with{Enabled=v}),"Drag files from anywhere, then hold a key to open a wheel of choices.");
         var modifiers=new[]{"Ctrl","Shift","Alt","Ctrl+Shift","Ctrl+Alt","Shift+Alt"};
@@ -96,6 +96,6 @@ public sealed partial class SettingsWindow:Window
         Caption("Everyday");
         Toggle("Reveal finished files in Explorer",store.Value.RevealFinished,v=>Save(store.Value with{RevealFinished=v}),"Opens the folder with the new file when a job finishes.");
         Toggle("Keep running in the system tray",store.Value.KeepInTray,v=>Save(store.Value with{KeepInTray=v}),"Closing the window keeps shortcuts and downloads ready.");
-        using(var key=Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run")){var enabled=key?.GetValue("Nashi") is string;Toggle("Launch at login",enabled,v=>{try{using var run=Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");if(v)run.SetValue("Nashi","\""+Environment.ProcessPath+"\" --background");else run.DeleteValue("Nashi",false);}catch(Exception error){MessageBox.Show(this,error.Message,"Launch at login");}},"Starts quietly in the tray when you sign in.");}
+        using(var key=Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run")){var enabled=key?.GetValue("Nashi") is string;Toggle("Launch at login",enabled,v=>{try{using var run=Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");if(v)run.SetValue("Nashi","\""+Environment.ProcessPath+"\" --background");else run.DeleteValue("Nashi",false);}catch(Exception error){MessageBox.Show(this,L10n.Text(error.Message),L10n.Text("Launch at login"));}},"Starts quietly in the tray when you sign in.");}
     }
 }

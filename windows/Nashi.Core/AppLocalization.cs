@@ -38,7 +38,20 @@ public static class AppLocalization
         var next=0;
         return Regex.Replace(value.Replace("%%","\u0001"),@"%(?:([0-9])\$)?(?:@|l{0,2}[du]|\.?[0-9]*f)",m=>"{"+(m.Groups[1].Success?int.Parse(m.Groups[1].Value)-1:next++)+"}").Replace("\u0001","%");
     }
-    private static readonly Dictionary<string,string> uppercase=Turkish.Where(x=>!x.Key.Contains("{0}",StringComparison.Ordinal)).GroupBy(x=>x.Key.ToUpperInvariant()).ToDictionary(g=>g.Key,g=>g.First().Value.ToUpper(CultureInfo.GetCultureInfo("tr-TR")));
+    // Product and key names that keep Latin capitals in Turkish upper case (SHIFT, not SHİFT). Declared before `uppercase`, which uses it.
+    public static IReadOnlySet<string> LatinWords{get;}=LoadLatinWords();
+    private static HashSet<string> LoadLatinWords()
+    {
+        using var stream=typeof(AppLocalization).Assembly.GetManifestResourceStream("Nashi.LatinWords.json")??throw new InvalidDataException("Missing Latin word list.");
+        return JsonSerializer.Deserialize<HashSet<string>>(stream)??throw new InvalidDataException("Invalid Latin word list.");
+    }
+    public static string Uppercase(string value,string language)
+    {
+        if(Normalize(language)!="tr")return value.ToUpperInvariant();
+        var turkish=CultureInfo.GetCultureInfo("tr-TR");
+        return Regex.Replace(value,@"\p{L}+",word=>LatinWords.Contains(word.Value)?word.Value.ToUpperInvariant():word.Value.ToUpper(turkish));
+    }
+    private static readonly Dictionary<string,string> uppercase=Turkish.Where(x=>!x.Key.Contains("{0}",StringComparison.Ordinal)).GroupBy(x=>x.Key.ToUpperInvariant()).ToDictionary(g=>g.Key,g=>Uppercase(g.First().Value,"tr"));
     private static readonly (Regex Pattern,string Target)[] templates=Turkish.Where(x=>x.Key.Contains("{0}",StringComparison.Ordinal)).OrderByDescending(x=>x.Key.Length).Select(x=>
     {
         var pattern=Regex.Escape(x.Key);

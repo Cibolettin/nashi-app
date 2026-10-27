@@ -28,6 +28,7 @@ public sealed partial class MainWindow:Window
     internal Window DownloadWindow=>webWindow??this;
     private readonly Button homeButton,libraryButton,updateButton,toolsSetupButton;private readonly ComboBox appearance;
     private readonly StackPanel workArea=new();
+    private readonly ScrollViewer homeScroll=new(),libraryScroll=new();
     private bool busy,checking,toolSetupOffered,altHandled;private WindowsUpdate? update;private Border? updateBanner;
     private ToolSetupWindow? toolSetupWindow;
     private readonly bool monitorToolSetup;
@@ -43,7 +44,7 @@ public sealed partial class MainWindow:Window
         // About one and a half default console windows, never larger than the work area.
         var work=SystemParameters.WorkArea;Title="Nashi";Width=Math.Min(1500,work.Width*.94);Height=Math.Min(840,work.Height*.92);MinWidth=900;MinHeight=640;WindowStartupLocation=WindowStartupLocation.CenterScreen;AllowDrop=true;
         Icon=BitmapFrame.Create(new Uri("pack://application:,,,/Assets/NashiIcon.png"));
-        var root=new DockPanel{Margin=new(32,18,32,14)};Content=root;Notifications.Host(this);
+        var root=new DockPanel{Margin=new(32,18,32,14)};Content=root;AddHandler(UIElement.PreviewMouseWheelEvent,new MouseWheelEventHandler(RoutePageMouseWheel),true);Notifications.Host(this);
         var header=new DockPanel{Margin=new(0,0,0,18)};DockPanel.SetDock(header,Dock.Top);root.Children.Add(header);
         var controls=new WrapPanel{HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Center};DockPanel.SetDock(controls,Dock.Right);header.Children.Add(controls);
         homeButton=Button("Home",()=>ShowLibrary(false));libraryButton=Button("Library",()=>{CloseWorkspace();ShowLibrary(true);});toolsSetupButton=Button(tools.Ready&&officeRuntime.Executable is not null?"Tools ready":"Finish setup",ShowToolSetupMenu);controls.Children.Add(toolsSetupButton);
@@ -55,7 +56,7 @@ public sealed partial class MainWindow:Window
         var brand=new StackPanel{Orientation=Orientation.Horizontal};brand.Children.Add(new Image{Source=FileGarden.Artwork("NashiMark"),Width=30,Height=30,Margin=new(0,0,10,0)});brand.Children.Add(Text("Nashi",17));header.Children.Add(brand);foreach(var control in controls.Children.OfType<Button>().Concat(pagesSwitch.Children.OfType<Button>())){control.Padding=new(12,6,12,6);control.FontSize=12;}
         DockPanel.SetDock(status,Dock.Bottom);status.Margin=new(4,14,4,0);root.Children.Add(status);
         // Pages share one Grid cell; each ScrollViewer follows its page's visibility so the hidden one cannot swallow clicks and wheel input.
-        var pages=new Grid();foreach(var page in new[]{home,libraryPage}){var scroller=new ScrollViewer{Content=page,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled};scroller.SetBinding(VisibilityProperty,new System.Windows.Data.Binding(nameof(Visibility)){Source=page});pages.Children.Add(scroller);}root.Children.Add(pages);
+        var pages=new Grid();foreach(var(page,scroller)in new[]{((FrameworkElement)home,homeScroll),(libraryPage,libraryScroll)}){scroller.Content=page;scroller.VerticalScrollBarVisibility=ScrollBarVisibility.Auto;scroller.HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled;scroller.SetBinding(VisibilityProperty,new System.Windows.Data.Binding(nameof(Visibility)){Source=page});pages.Children.Add(scroller);}root.Children.Add(pages);
         var updateRow=new DockPanel();DockPanel.SetDock(updateButton,Dock.Right);updateRow.Children.Add(updateButton);var updateCaption=new StackPanel();updateCaption.Children.Add(Text("A little fresher. Ready when you are.",16));updateCaption.Children.Add(Text("You choose when to download and install.",12,"Muted"));updateRow.Children.Add(updateCaption);updateBanner=Card(updateRow);updateBanner.Visibility=Visibility.Collapsed;home.Children.Add(updateBanner);
         // The title row carries the shortcut help as an info button at its far end.
         var titleRow=new DockPanel{Margin=new(0,10,0,0)};infoButton=new Button{Style=(Style)FindResource("IconButton"),Content=Icons.Create("info",17),Width=34,Height=34,VerticalAlignment=VerticalAlignment.Center};BuildInfo();AutomationProperties.SetName(infoButton,"Shortcuts");DockPanel.SetDock(infoButton,Dock.Right);titleRow.Children.Add(infoButton);homeTitle.FontSize=28;titleRow.Children.Add(homeTitle);home.Children.Add(titleRow);var intro=Text("Convert, fine-tune, and send them on their way.",14,"Muted");intro.Margin=new(0,4,0,0);home.Children.Add(intro);
@@ -92,6 +93,21 @@ public sealed partial class MainWindow:Window
             Loaded+=async(_,_)=>{if(preferences.Value.AutomaticUpdateChecks)await CheckUpdatesAsync();};
             var timer=new System.Windows.Threading.DispatcherTimer{Interval=TimeSpan.FromHours(1)};timer.Tick+=async(_,_)=>{if(preferences.Value.AutomaticUpdateChecks)await CheckUpdatesAsync();};Closed+=(_,_)=>timer.Stop();timer.Start();
         }
+    }
+    private void RoutePageMouseWheel(object sender,MouseWheelEventArgs e)
+    {
+        var page=home.Visibility==Visibility.Visible?homeScroll:libraryScroll;
+        for(var source=e.OriginalSource as DependencyObject;source is not null&&!ReferenceEquals(source,page);source=source is Visual?VisualTreeHelper.GetParent(source):LogicalTreeHelper.GetParent(source))
+        {
+            if(source is not ScrollViewer nested)continue;
+            var canScroll=e.Delta>0?nested.VerticalOffset>.5:nested.VerticalOffset<nested.ScrollableHeight-.5;
+            if(canScroll)return;
+            page.ScrollToVerticalOffset(page.VerticalOffset-e.Delta);
+            e.Handled=true;
+            return;
+        }
+        page.ScrollToVerticalOffset(page.VerticalOffset-e.Delta);
+        e.Handled=true;
     }
     private IEnumerable<LibraryEntry> SearchLibrary(string query)
     {
@@ -176,7 +192,7 @@ public sealed partial class MainWindow:Window
         dialog.Closing+=(_,e)=>{if(busy){e.Cancel=true;L10n.SetText(status,"Finish or cancel the current operation first.");}};
         dialog.Closed+=(_,_)=>{inspection?.Cancel();if(dialog.Content is ScrollViewer scroll)scroll.Content=null;dialog.Content=null;webWindow=null;};dialog.PreviewKeyDown+=(_,e)=>{if(e.Key==Key.Escape&&!busy){dialog.Close();e.Handled=true;}};dialog.Show();link.Focus();
     }
-    private void SetBusy(bool value){busy=value;Thumbnails.Ffmpeg=tools.Ready?tools.Executable("ffmpeg"):null;updateButton.IsEnabled=!value;workArea.IsEnabled=!value;webContent.IsEnabled=!value;L10n.Bind(toolsSetupButton,ContentControl.ContentProperty,tools.Ready&&officeRuntime.Executable is not null?"Tools ready":"Finish setup");RenderLibrary();}
+    private void SetBusy(bool value){busy=value;Thumbnails.Ffmpeg=tools.Ready?tools.Executable("ffmpeg"):null;updateButton.IsEnabled=!value&&!checking;workArea.IsEnabled=!value;webContent.IsEnabled=!value;L10n.Bind(toolsSetupButton,ContentControl.ContentProperty,tools.Ready&&officeRuntime.Executable is not null?"Tools ready":"Finish setup");RenderLibrary();}
     private static bool All(IReadOnlyList<string> paths,string[] extensions)=>paths.Count>0&&paths.All(p=>extensions.Contains(Path.GetExtension(p).TrimStart('.').ToLowerInvariant()));
     private static bool Images(IReadOnlyList<string> paths)=>paths.Count>0&&paths.All(FeatureCatalog.IsImage);
     private static bool Video(IReadOnlyList<string> paths)=>All(paths,["mp4","mov","mkv","webm","avi","wmv","m4v","gif"]);
@@ -239,7 +255,7 @@ public sealed partial class MainWindow:Window
             if(imageSelection)preview=ImageEngine.Load(input);
             else if(mediaSelection)
             {
-                if(!tools.Ready){MessageBox.Show(this,"Choose Set up media tools once to enable media editing.","Media setup");return;}
+                if(!tools.Ready){MessageBox.Show(this,L10n.Text("Choose Set up media tools once to enable media editing."),L10n.Text("Media setup"));return;}
                 var engine=new MediaEngine(tools.Executable("ffmpeg"),tools.Executable("ffprobe"));info=await engine.InspectAsync(input);
                 if(choice.Id is "cropVideo" or "redactVideo")
                 {
@@ -262,7 +278,7 @@ public sealed partial class MainWindow:Window
             else if(choice.Id is "unzip" or "extractArchive")await RunAsync((destination,p,t)=>Task.Run<IReadOnlyList<string>>(()=>{using var tx=new ExportTransaction(destination);var outputs=inputs.SelectMany(file=>ArchiveEngine.Extract(file,tx.StagingDirectory,editor.DocumentOptions.Password,p,t)).ToList();return tx.Publish(outputs,t);},t));
             else await RunAsync((destination,p,t)=>Task.Run(()=>DocumentEngine.Pdf(choice.Id,inputs,destination,editor.Pages,t),t),choice.Title);
         }
-        catch(Exception error){MessageBox.Show(this,error.Message,"Couldn’t open this tool",MessageBoxButton.OK,MessageBoxImage.Information);}
+        catch(Exception error){MessageBox.Show(this,L10n.Text(error.Message),L10n.Text("Couldn’t open this tool"),MessageBoxButton.OK,MessageBoxImage.Information);}
         finally{if(temporary is not null&&File.Exists(temporary))File.Delete(temporary);SetBusy(false);}
     }
     private sealed record QueuedJob(Func<string,IProgress<OperationProgress>,CancellationToken,Task<IReadOnlyList<string>>> Work,string Label,string Destination,FileDesk Desk,IReadOnlyList<string> Sources,NotificationCard Card,CancellationTokenSource Cancellation,TaskCompletionSource Done,Guid? Space=null);
@@ -323,17 +339,17 @@ public sealed partial class MainWindow:Window
     {
         if(busy)return;
         var payload=WebMediaPayload.Parse(link.Text);var kind=downloadKind.SelectedItem as string??"video";
-        if(!tools.Ready&&kind!="image"&&payload?.Kind!="image"&&!(kind=="thumbnail"&&payload?.Kind=="youtube")){MessageBox.Show(webWindow??this,"Choose Set up media tools once to enable web downloads.","Media setup");return;}
+        if(!tools.Ready&&kind!="image"&&payload?.Kind!="image"&&!(kind=="thumbnail"&&payload?.Kind=="youtube")){MessageBox.Show(webWindow??this,L10n.Text("Choose Set up media tools once to enable web downloads."),L10n.Text("Media setup"));return;}
         if(kind=="photos"&&inspectedLink!=link.Text){await InspectWebLinkAsync();return;}
-        try{var url=WebDownload.Validate(payload?.Url??link.Text).AbsoluteUri;await RunAsync((destination,p,t)=>new WebDownload(tools).DownloadAsync(url,kind,destination,p,t,webQuality.SelectedIndex==1?1080:webQuality.SelectedIndex==2?720:null,kind=="photos"?new HashSet<int>(selectedWebPhotos):null),"Download "+kind);}catch(Exception error){MessageBox.Show(webWindow??this,error.Message,"Check your link");}
+        try{var url=WebDownload.Validate(payload?.Url??link.Text).AbsoluteUri;await RunAsync((destination,p,t)=>new WebDownload(tools).DownloadAsync(url,kind,destination,p,t,webQuality.SelectedIndex==1?1080:webQuality.SelectedIndex==2?720:null,kind=="photos"?new HashSet<int>(selectedWebPhotos):null),"Download "+kind);}catch(Exception error){MessageBox.Show(webWindow??this,L10n.Text(error.Message),L10n.Text("Check your link"));}
     }
     private async Task SetupAsync()
     {
         if(busy)return;if(tools.Ready){L10n.SetText(status,"Media tools are already installed.");return;}
-        if(MessageBox.Show(this,"Download FFmpeg (~180 MB), yt-dlp and Deno directly from their official GitHub releases? SHA-256 hashes are verified before use. FFmpeg is GPL; the other upstream licenses and source links are listed on our Features page. No administrator password is needed.","Set up media tools",MessageBoxButton.OKCancel,MessageBoxImage.Information)!=MessageBoxResult.OK)return;
+        if(MessageBox.Show(this,L10n.Text("Download FFmpeg (~180 MB), yt-dlp and Deno directly from their official GitHub releases? SHA-256 hashes are verified before use. FFmpeg is GPL; the other upstream licenses and source links are listed on our Features page. No administrator password is needed."),L10n.Text("Set up media tools"),MessageBoxButton.OKCancel,MessageBoxImage.Information)!=MessageBoxResult.OK)return;
         SetBusy(true);using var cancellation=new CancellationTokenSource();var toast=Notifications.Shared.Job("Working…",cancellation.Cancel);toast.Start();
         try{await tools.InstallAsync(new Progress<OperationProgress>(toast.Update),cancellation.Token);toast.Close();L10n.SetText(status,"Media tools ready. You can edit, convert and download media.");}
-        catch(OperationCanceledException){toast.Close();L10n.SetText(status,"Setup cancelled.");}catch(Exception error){toast.Close();MessageBox.Show(this,error.Message,"Setup couldn’t finish");}finally{SetBusy(false);}
+        catch(OperationCanceledException){toast.Close();L10n.SetText(status,"Setup cancelled.");}catch(Exception error){toast.Close();MessageBox.Show(this,L10n.Text(error.Message),L10n.Text("Setup couldn’t finish"));}finally{SetBusy(false);}
     }
     internal void OfferUpdate(WindowsUpdate candidate){update=candidate;L10n.SetContent(updateButton,"Update to "+candidate.Version);if(updateBanner is not null)updateBanner.Visibility=Visibility.Visible;tray?.UpdateAvailable(candidate.Version);}
     /// The hourly background check only finds updates (Home shows a banner); Settings › Updates installs them.
