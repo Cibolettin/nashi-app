@@ -11,5 +11,7 @@
   </ItemGroup>
   <ItemGroup><EmbeddedResource Include="../../Resources/FeatureCatalog.json" LogicalName="Nashi.FeatureCatalog.json" /></ItemGroup>
   <ItemGroup><EmbeddedResource Include="../../Sources/NashiCore/Resources/Turkish.json" LogicalName="Nashi.Turkish.json" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="../../Resources/Localizations/tr.lproj/Localizable.strings" LogicalName="Nashi.Turkish.strings" /></ItemGroup>
+  <ItemGroup><EmbeddedResource Include="Turkish.Windows.json" LogicalName="Nashi.Turkish.Windows.json" /></ItemGroup>
   <ItemGroup><InternalsVisibleTo Include="Nashi.Verify" /></ItemGroup>
 </Project>
